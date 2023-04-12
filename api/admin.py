@@ -9,14 +9,13 @@ from .models import Tag
 # LOGIN - admin
 # PASSWORD - admin
 # Email - admin@admin.admin
-#admin.site.unregister(User)
-#admin.site.register(User, UserAdmin)
+# admin.site.unregister(User)
+# admin.site.register(User, UserAdmin)
 
 User._meta.get_field('email')._unique = True
 User._meta.get_field('email').blank = False
 User._meta.get_field('email').null = False
 User._meta.get_field('email').required = True
-
 
 
 class CustomUserCreationForm(UserCreationForm):
@@ -38,4 +37,10 @@ class UserAdmin(BaseUserAdmin):
         (_('Important fields'), {'fields': ('email',)}),
     )
 
-admin.site.register(Tag)
+
+class TagAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name',)
+    list_editable = ('name',)
+
+
+admin.site.register(Tag, TagAdmin)
