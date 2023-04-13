@@ -8,6 +8,30 @@ from .models import Tag, Question, Voting
 User = get_user_model()
 
 
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email')
+
+
+# Register Serializer
+class RegisterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email', 'password')
+        extra_kwargs = {'password': {'write_only': True}}
+
+    def create(self, validated_data):
+        user = User.objects.create_user(validated_data['username'], validated_data['email'], validated_data['password'])
+
+        return user
+
+
+class Response201AuthTokenSerializer(serializers.Serializer):
+    token = serializers.CharField(required=True, allow_blank=False)
+    user_id = serializers.IntegerField(required=True)
+
+
 class VotingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Voting
@@ -41,3 +65,9 @@ class QuestionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
         fields = ['id', 'title', 'content', 'author', 'author_id', 'created_at', 'updated_at', 'tag', 'voting']
+
+
+class QuestionUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Question
+        fields = ('id', 'title', 'content',)
