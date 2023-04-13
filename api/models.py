@@ -1,13 +1,6 @@
-from django.db import models
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
-from django.core.exceptions import ObjectDoesNotExist
-from django.db import models, transaction
-
-VOTE_UP = 1
-VOTE_DOWN = 0
-VOTE_UP_COUNTER_VALUE = +1
-VOTE_DOWN_COUNTER_VALUE = -1
+from django.db import models
 
 
 class Tag(models.Model):
@@ -21,8 +14,7 @@ class Tag(models.Model):
 
 
 class Voting(models.Model):
-    count_up = models.IntegerField(verbose_name='Count Up')
-    count_down = models.IntegerField(verbose_name='Count Down')
+    summary_rating = models.IntegerField(default=0, verbose_name='Summary rating')
 
     def __str__(self):
         return f"{self.pk}"

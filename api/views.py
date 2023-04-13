@@ -1,28 +1,18 @@
-from rest_framework.authtoken.models import Token
-from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.decorators import api_view
 from rest_framework.permissions import IsAdminUser
 from rest_framework.authtoken.serializers import AuthTokenSerializer
 from rest_framework.response import Response
-from rest_framework import mixins
-from rest_framework import status
-from rest_framework import authentication
-from rest_framework import generics, permissions
-from rest_framework import permissions
+from rest_framework import mixins, status, generics, permissions
 
 from django.contrib.auth import login
-from django.http import JsonResponse
-from django.utils.translation import gettext_lazy as _
-
-from drf_yasg import openapi
-from drf_yasg.utils import swagger_auto_schema
 
 from knox.models import AuthToken
 from knox.views import LoginView as KnoxLoginView
 
 from .serializers import *
 from . import serializers
-from .models import Tag, Question, Voting
+from .models import Tag, Question, Voting, Answer, Comment
+from .permissions import AuthorOrStaffForEditPost
 
 User = get_user_model()
 
@@ -51,26 +41,6 @@ class LoginAPI(KnoxLoginView):
         return super(LoginAPI, self).post(request, format=None)
 
 
-class CustomAuthToken(ObtainAuthToken):
-    authentication_classes = [authentication.BasicAuthentication]
-
-    @swagger_auto_schema(responses={
-        "201": openapi.Response(
-            description=_("User has got Token"),
-            schema=Response201AuthTokenSerializer,
-        )
-    })
-    def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data,
-                                           context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data['user']
-        token, created = Token.objects.get_or_create(user=user)
-        response201 = Response201AuthTokenSerializer(data={"token": token.key, "user_id": user.pk})
-        response201.is_valid(raise_exception=True)
-        return JsonResponse(response201.data)
-
-
 class UserList(generics.ListAPIView):
     queryset = User.objects.all()
     serializer_class = serializers.UserSerializer
@@ -81,7 +51,7 @@ class UserDetail(generics.RetrieveAPIView):
     serializer_class = serializers.UserSerializer
 
 
-class TagList(generics.ListAPIView):
+class TagList(generics.ListCreateAPIView):
     queryset = Tag.objects.all()
     serializer_class = serializers.TagSerializer
 
@@ -91,12 +61,18 @@ class TagDetail(generics.RetrieveAPIView):
     serializer_class = serializers.TagSerializer
 
 
+class TagDelete(generics.DestroyAPIView):
+    queryset = Tag.objects.all()
+    serializer_class = serializers.TagSerializer
+    permission_classes = (IsAdminUser,)
+
+
 class QuestionList(generics.ListCreateAPIView):
     queryset = Question.objects.all()
     serializer_class = QuestionSerializer
 
     def perform_create(self, serializer):
-        new_voting = Voting.objects.create(count_down=0, count_up=0)
+        new_voting = Voting.objects.create()
         serializer.save(voting=new_voting)
 
 
@@ -121,6 +97,68 @@ class QuestionDelete(generics.DestroyAPIView):
     queryset = Question.objects.all()
     serializer_class = QuestionSerializer
     permission_classes = (IsAdminUser,)
+
+
+class AnswerList(generics.ListCreateAPIView):
+    queryset = Answer.objects.all()
+    serializer_class = serializers.AnswerSerializer
+
+    def perform_create(self, serializer):
+        new_voting = Voting.objects.create()
+        serializer.save(voting=new_voting)
+
+
+class AnswerView(generics.ListAPIView):
+    queryset = Answer.objects.all()
+    serializer_class = AnswerSerializer
+
+
+class AnswerUpdate(generics.GenericAPIView, mixins.UpdateModelMixin):
+    queryset = Answer.objects.all()
+    serializer_class = AnswerUpdateSerializer
+    permission_classes = (AuthorOrStaffForEditPost,)
+
+    def put(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+
+
+class AnswerDelete(generics.DestroyAPIView):
+    queryset = Answer.objects.all()
+    serializer_class = AnswerSerializer
+    permission_classes = (AuthorOrStaffForEditPost,)
+
+
+class CommentList(generics.ListCreateAPIView):
+    queryset = Comment.objects.all()
+    serializer_class = serializers.CommentSerializer
+
+
+class CommentView(generics.ListAPIView):
+    queryset = Comment.objects.all()
+    serializer_class = CommentSerializer
+
+
+class CommentUpdate(generics.GenericAPIView, mixins.UpdateModelMixin):
+    queryset = Comment.objects.all()
+    serializer_class = CommentUpdateSerializer
+    permission_classes = (AuthorOrStaffForEditPost,)
+
+    def put(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+
+
+class CommentDelete(generics.DestroyAPIView):
+    queryset = Comment.objects.all()
+    serializer_class = CommentSerializer
+    permission_classes = (AuthorOrStaffForEditPost,)
 
 
 @api_view(['GET', 'PUT', 'DELETE'])
