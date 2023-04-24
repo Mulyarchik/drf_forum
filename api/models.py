@@ -20,12 +20,7 @@ class Voting(models.Model):
         return f"{self.pk}"
 
 
-def user_directory_path(instance, filename):
-    return 'profile_picture/user_{0}/{1}'.format(instance.id, filename)
-
-
 class User(AbstractUser):
-    image = models.ImageField(upload_to=user_directory_path, blank=True, null=True)
     voting = models.ManyToManyField(Voting, through='UserVoting')
 
 

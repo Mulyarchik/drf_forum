@@ -1,9 +1,7 @@
-from rest_framework.decorators import api_view
-from rest_framework.permissions import IsAdminUser
 from rest_framework.authtoken.serializers import AuthTokenSerializer
 from rest_framework.response import Response
-from rest_framework import mixins, status, generics, permissions
-
+from rest_framework import mixins, status, generics, permissions, viewsets
+from rest_condition import And, Or
 from django.contrib.auth import login
 
 from knox.models import AuthToken
@@ -12,7 +10,8 @@ from knox.views import LoginView as KnoxLoginView
 from .serializers import *
 from . import serializers
 from .models import Tag, Question, Voting, Answer, Comment
-from .permissions import AuthorOrStaffForEditPost
+from .permissions import IsReadOnlyRequest, IsGetRequest, IsPostRequestForTags, \
+    IsDeleteRequest, IsPatchRequestForQuestion, IsPostRequest, IsDeleteRequestForQuestions
 
 User = get_user_model()
 
@@ -51,134 +50,106 @@ class UserDetail(generics.RetrieveAPIView):
     serializer_class = serializers.UserSerializer
 
 
-class TagList(generics.ListCreateAPIView):
+class TagViewSet(generics.GenericAPIView, viewsets.ViewSet):
     queryset = Tag.objects.all()
     serializer_class = serializers.TagSerializer
+    permission_classes = [Or(And(IsReadOnlyRequest),
+                             And(IsPostRequestForTags),
+                             And(IsDeleteRequest))]
 
+    def list(self, request):
+        page = self.paginate_queryset(self.queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
 
-class TagDetail(generics.RetrieveAPIView):
-    queryset = Tag.objects.all()
-    serializer_class = serializers.TagSerializer
-
-
-class TagDelete(generics.DestroyAPIView):
-    queryset = Tag.objects.all()
-    serializer_class = serializers.TagSerializer
-    permission_classes = (IsAdminUser,)
-
-
-class QuestionList(generics.ListCreateAPIView):
-    queryset = Question.objects.all()
-    serializer_class = QuestionSerializer
-
-    def perform_create(self, serializer):
-        new_voting = Voting.objects.create()
-        serializer.save(voting=new_voting)
-
-
-class QuestionView(generics.ListAPIView):
-    queryset = Question.objects.all()
-    serializer_class = QuestionSerializer
-
-
-class QuestionUpdate(generics.GenericAPIView, mixins.UpdateModelMixin):
-    queryset = Question.objects.all()
-    serializer_class = QuestionUpdateSerializer
-
-    def put(self, request, *args, **kwargs):
-        return self.update(request, *args, **kwargs)
-
-    def patch(self, request, *args, **kwargs):
-        kwargs['partial'] = True
-        return self.update(request, *args, **kwargs)
-
-
-class QuestionDelete(generics.DestroyAPIView):
-    queryset = Question.objects.all()
-    serializer_class = QuestionSerializer
-    permission_classes = (IsAdminUser,)
-
-
-class AnswerList(generics.ListCreateAPIView):
-    queryset = Answer.objects.all()
-    serializer_class = serializers.AnswerSerializer
-
-    def perform_create(self, serializer):
-        new_voting = Voting.objects.create()
-        serializer.save(voting=new_voting)
-
-
-class AnswerView(generics.ListAPIView):
-    queryset = Answer.objects.all()
-    serializer_class = AnswerSerializer
-
-
-class AnswerUpdate(generics.GenericAPIView, mixins.UpdateModelMixin):
-    queryset = Answer.objects.all()
-    serializer_class = AnswerUpdateSerializer
-    permission_classes = (AuthorOrStaffForEditPost,)
-
-    def put(self, request, *args, **kwargs):
-        return self.update(request, *args, **kwargs)
-
-    def patch(self, request, *args, **kwargs):
-        kwargs['partial'] = True
-        return self.update(request, *args, **kwargs)
-
-
-class AnswerDelete(generics.DestroyAPIView):
-    queryset = Answer.objects.all()
-    serializer_class = AnswerSerializer
-    permission_classes = (AuthorOrStaffForEditPost,)
-
-
-class CommentList(generics.ListCreateAPIView):
-    queryset = Comment.objects.all()
-    serializer_class = serializers.CommentSerializer
-
-
-class CommentView(generics.ListAPIView):
-    queryset = Comment.objects.all()
-    serializer_class = CommentSerializer
-
-
-class CommentUpdate(generics.GenericAPIView, mixins.UpdateModelMixin):
-    queryset = Comment.objects.all()
-    serializer_class = CommentUpdateSerializer
-    permission_classes = (AuthorOrStaffForEditPost,)
-
-    def put(self, request, *args, **kwargs):
-        return self.update(request, *args, **kwargs)
-
-    def patch(self, request, *args, **kwargs):
-        kwargs['partial'] = True
-        return self.update(request, *args, **kwargs)
-
-
-class CommentDelete(generics.DestroyAPIView):
-    queryset = Comment.objects.all()
-    serializer_class = CommentSerializer
-    permission_classes = (AuthorOrStaffForEditPost,)
-
-
-@api_view(['GET', 'PUT', 'DELETE'])
-def snippet_detail(request, pk):
-    try:
-        question = Question.objects.get(pk=pk)
-    except Question.DoesNotExist:
-        return Response(status=status.HTTP_404_NOT_FOUND)
-
-    if request.method == 'GET':
-        serializer = QuestionSerializer(question)
+        serializer = self.get_serializer(self.queryset, many=True)
         return Response(serializer.data)
 
-    elif request.method == 'PUT':
-        serializer = QuestionSerializer(question, data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def create(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    elif request.method == 'DELETE':
-        question.delete()
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+    def destroy(self, request, pk=None):
+        instance = self.get_object()
+        instance.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class QuestionViewSet(mixins.ListModelMixin,
+                      mixins.CreateModelMixin,
+                      mixins.RetrieveModelMixin,
+                      mixins.UpdateModelMixin,
+                      mixins.DestroyModelMixin,
+                      viewsets.GenericViewSet):
+    queryset = Question.objects.all()
+    http_method_names = ['get', 'post', 'patch', 'delete']
+
+    permission_classes = [Or(And(IsReadOnlyRequest),
+                             And(IsPostRequestForTags, IsGetRequest),
+                             # And(IsPatchRequestForQuestion),
+                             And(IsDeleteRequestForQuestions))]
+
+    def get_serializer_class(self):
+        if self.request.method == 'GET' or self.request.method == 'POST':
+            return serializers.QuestionSerializer
+        if self.request.method == 'PATCH':
+            return serializers.QuestionUpdateSerializer
+
+    def perform_create(self, serializer):
+        voting = Voting.objects.create()
+        serializer.save(voting=voting)
+
+
+class AnswerViewSet(generics.GenericAPIView, viewsets.ViewSet):
+    queryset = Answer.objects.all()
+
+    # permission_classes = (IsAuthorOrStaff,)
+
+    def get_serializer_class(self):
+        if self.request.method == 'GET' or self.request.method == 'POST':
+            return serializers.AnswerSerializer
+        if self.request.method == 'PATCH':
+            return serializers.AnswerUpdateSerializer
+
+    def list(self, request):
+        serializer = self.get_serializer(self.queryset, many=True)
+        return Response(serializer.data)
+
+    def create(self, request):
+        serializer = self.get_serializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+    def destroy(self, request, pk=None):
+        instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CommentViewSet(mixins.CreateModelMixin,
+                     mixins.ListModelMixin,
+                     mixins.RetrieveModelMixin,
+                     mixins.UpdateModelMixin,
+                     mixins.DestroyModelMixin,
+                     viewsets.GenericViewSet):
+    queryset = Comment.objects.all()
+
+    def get_serializer_class(self):
+        if self.request.method == 'GET' or self.request.method == 'POST':
+            return serializers.CommentSerializer
+        if self.request.method == 'PATCH':
+            return serializers.CommentUpdateSerializer
