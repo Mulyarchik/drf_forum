@@ -22,8 +22,8 @@ urlpatterns = [
     path('users/', views.UserList.as_view()),
     path('users/<int:pk>/', views.UserDetail.as_view()),
 
-    # path('questions/<int:pk>/vote/', views.AnswerLike.as_view()),  # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    # path('answers/<int:pk>/vote/', views.AnswerLike.as_view()),
+    path('questions/<int:pk>/vote/', views.QuestionVote.as_view()),
+    path('answers/<int:pk>/vote/', views.AnswerVote.as_view()),
 
 ]
 urlpatterns += router.urls

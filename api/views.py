@@ -1,3 +1,6 @@
+from django.db import transaction
+from django.db.models import F
+from psycopg2 import IntegrityError
 from rest_framework.authtoken.serializers import AuthTokenSerializer
 from rest_framework.response import Response
 from rest_framework import mixins, status, generics, permissions, viewsets
@@ -9,9 +12,8 @@ from knox.views import LoginView as KnoxLoginView
 
 from .serializers import *
 from . import serializers
-from .models import Tag, Question, Voting, Answer, Comment
-from .permissions import IsReadOnlyRequest, IsGetRequest, IsPostRequestForTags, \
-    IsDeleteRequest, IsPatchRequestForQuestion, IsPostRequest, IsDeleteRequestForQuestions
+from .models import Tag, Question, Voting, Answer, Comment, UserVoting, AlreadyVoted
+from .permissions import IsReadOnlyRequest, IsDeleteRequest, IsPostRequest
 
 User = get_user_model()
 
@@ -54,7 +56,7 @@ class TagViewSet(generics.GenericAPIView, viewsets.ViewSet):
     queryset = Tag.objects.all()
     serializer_class = serializers.TagSerializer
     permission_classes = [Or(And(IsReadOnlyRequest),
-                             And(IsPostRequestForTags),
+                             And(IsPostRequest),
                              And(IsDeleteRequest))]
 
     def list(self, request):
@@ -83,19 +85,20 @@ class TagViewSet(generics.GenericAPIView, viewsets.ViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class QuestionViewSet(mixins.ListModelMixin,
+class MyCustomViewSet(mixins.ListModelMixin,
                       mixins.CreateModelMixin,
                       mixins.RetrieveModelMixin,
                       mixins.UpdateModelMixin,
                       mixins.DestroyModelMixin,
                       viewsets.GenericViewSet):
-    queryset = Question.objects.all()
-    http_method_names = ['get', 'post', 'patch', 'delete']
+    """ My custom viewset with crud requests GH:Mulyarchik """
+    pass
 
-    permission_classes = [Or(And(IsReadOnlyRequest),
-                             And(IsPostRequestForTags, IsGetRequest),
-                             # And(IsPatchRequestForQuestion),
-                             And(IsDeleteRequestForQuestions))]
+
+class QuestionViewSet(MyCustomViewSet):
+    queryset = Question.objects.all()
+    serializer_class = QuestionSerializer
+    http_method_names = ['get', 'post', 'patch', 'delete']
 
     def get_serializer_class(self):
         if self.request.method == 'GET' or self.request.method == 'POST':
@@ -108,10 +111,8 @@ class QuestionViewSet(mixins.ListModelMixin,
         serializer.save(voting=voting)
 
 
-class AnswerViewSet(generics.GenericAPIView, viewsets.ViewSet):
+class AnswerViewSet(MyCustomViewSet):
     queryset = Answer.objects.all()
-
-    # permission_classes = (IsAuthorOrStaff,)
 
     def get_serializer_class(self):
         if self.request.method == 'GET' or self.request.method == 'POST':
@@ -119,33 +120,12 @@ class AnswerViewSet(generics.GenericAPIView, viewsets.ViewSet):
         if self.request.method == 'PATCH':
             return serializers.AnswerUpdateSerializer
 
-    def list(self, request):
-        serializer = self.get_serializer(self.queryset, many=True)
-        return Response(serializer.data)
-
-    def create(self, request):
-        serializer = self.get_serializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-        serializer = self.get_serializer(instance)
-        return Response(serializer.data)
-
-    def destroy(self, request, pk=None):
-        instance = self.get_object()
-        instance.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+    def perform_create(self, serializer):
+        voting = Voting.objects.create()
+        serializer.save(voting=voting)
 
 
-class CommentViewSet(mixins.CreateModelMixin,
-                     mixins.ListModelMixin,
-                     mixins.RetrieveModelMixin,
-                     mixins.UpdateModelMixin,
-                     mixins.DestroyModelMixin,
-                     viewsets.GenericViewSet):
+class CommentViewSet(MyCustomViewSet):
     queryset = Comment.objects.all()
 
     def get_serializer_class(self):
@@ -153,3 +133,37 @@ class CommentViewSet(mixins.CreateModelMixin,
             return serializers.CommentSerializer
         if self.request.method == 'PATCH':
             return serializers.CommentUpdateSerializer
+
+
+class QuestionVote(generics.CreateAPIView, generics.GenericAPIView):
+    queryset = UserVoting.objects.all()
+    serializer_class = UserVotingSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        question = Question.objects.get(pk=self.kwargs['pk'])
+
+        try:
+            question.voting.set_vote(serializer.validated_data)
+        except AlreadyVoted:
+            return Response(status=status.HTTP_409_CONFLICT)
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class AnswerVote(generics.CreateAPIView, generics.GenericAPIView):
+    queryset = UserVoting.objects.all()
+    serializer_class = UserVotingSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        answer = Answer.objects.get(pk=self.kwargs['pk'])
+
+        try:
+            answer.voting.set_vote(serializer.validated_data)
+        except AlreadyVoted:
+            return Response(status=status.HTTP_302_FOUND)
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)

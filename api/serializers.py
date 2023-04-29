@@ -3,7 +3,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from rest_framework.fields import CurrentUserDefault
 
-from .models import Tag, Question, Voting, Answer, Comment
+from .models import Tag, Question, Voting, Answer, Comment, UserVoting
 
 User = get_user_model()
 
@@ -40,7 +40,16 @@ class VotingSerializer(serializers.ModelSerializer):
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
-        fields = ['id', 'name']
+        fields = ('id', 'name')
+
+
+class UserVotingSerializer(serializers.ModelSerializer):
+    user = serializers.HiddenField(default=CurrentUserDefault())
+    value = serializers.ChoiceField(choices={(1, '1'), (-1, '-1')})
+
+    class Meta:
+        model = UserVoting
+        fields = ('value', 'user')
 
 
 class QuestionSerializer(serializers.ModelSerializer):
@@ -48,7 +57,8 @@ class QuestionSerializer(serializers.ModelSerializer):
     updated_at = serializers.DateTimeField(read_only=True, default=timezone.now)
     author_id = serializers.HiddenField(default=CurrentUserDefault())
     author = serializers.CharField(source='author.username', read_only=True)
-    voting = serializers.CharField(read_only=True)
+    #voting = serializers.CharField(read_only=True)
+    voting = serializers.StringRelatedField()
 
     def __init__(self, *args, **kwargs):
         user = kwargs['context']['request'].user
@@ -57,7 +67,7 @@ class QuestionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Question
-        fields = ['id', 'title', 'content', 'author', 'author_id', 'created_at', 'updated_at', 'tag', 'voting']
+        fields = ('id', 'title', 'content', 'author', 'author_id', 'created_at', 'updated_at', 'tag', 'voting')
 
 
 class QuestionUpdateSerializer(serializers.ModelSerializer):
@@ -79,7 +89,7 @@ class AnswerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Answer
-        fields = ['id', 'question', 'content', 'author', 'author_id', 'created_at', 'is_useful', 'voting']
+        fields = ('id', 'question', 'content', 'author', 'author_id', 'created_at', 'is_useful', 'voting')
 
 
 class AnswerUpdateSerializer(serializers.ModelSerializer):
@@ -99,7 +109,7 @@ class CommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Comment
-        fields = ['id', 'author', 'author_id', 'answer', 'content', 'created_at']
+        fields = ('id', 'author', 'author_id', 'answer', 'content', 'created_at')
 
 
 class CommentUpdateSerializer(serializers.ModelSerializer):

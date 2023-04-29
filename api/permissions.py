@@ -1,7 +1,7 @@
 from rest_framework import permissions
 
 
-class IsPatchRequestForQuestion(permissions.BasePermission):
+class IsPatchRequest(permissions.BasePermission):
     def has_permission(self, request, view):
         if request.user.is_authenticated:
             return True
@@ -20,17 +20,7 @@ class IsReadOnlyRequest(permissions.BasePermission):
         return request.method in permissions.SAFE_METHODS
 
 
-class IsGetRequest(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return request.method == "GET"
-
-
 class IsPostRequest(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return request.method in permissions.SAFE_METHODS
-
-
-class IsPostRequestForTags(permissions.BasePermission):
     def has_permission(self, request, view):
         if request.user.is_staff:
             return True
@@ -44,9 +34,8 @@ class IsDeleteRequest(permissions.BasePermission):
         return False
 
 
-class IsDeleteRequestForQuestions(permissions.BasePermission):
-
+class MyPermClass(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
-        if obj.author == request.user:
+        if obj.user == request.user:
             return True
         return False
