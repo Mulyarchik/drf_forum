@@ -85,17 +85,7 @@ class TagViewSet(generics.GenericAPIView, viewsets.ViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class MyCustomViewSet(mixins.ListModelMixin,
-                      mixins.CreateModelMixin,
-                      mixins.RetrieveModelMixin,
-                      mixins.UpdateModelMixin,
-                      mixins.DestroyModelMixin,
-                      viewsets.GenericViewSet):
-    """ My custom viewset with crud requests GH:Mulyarchik """
-    pass
-
-
-class QuestionViewSet(MyCustomViewSet):
+class QuestionViewSet(viewsets.ModelViewSet):
     queryset = Question.objects.all()
     serializer_class = QuestionSerializer
     http_method_names = ['get', 'post', 'patch', 'delete']
@@ -111,8 +101,10 @@ class QuestionViewSet(MyCustomViewSet):
         serializer.save(voting=voting)
 
 
-class AnswerViewSet(MyCustomViewSet):
+class AnswerViewSet(viewsets.ModelViewSet):
     queryset = Answer.objects.all()
+    serializer_class = AnswerSerializer
+    http_method_names = ['get', 'post', 'patch', 'delete']
 
     def get_serializer_class(self):
         if self.request.method == 'GET' or self.request.method == 'POST':
@@ -125,8 +117,10 @@ class AnswerViewSet(MyCustomViewSet):
         serializer.save(voting=voting)
 
 
-class CommentViewSet(MyCustomViewSet):
+class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.all()
+    serializer_class = CommentSerializer
+    http_method_names = ['get', 'post', 'patch', 'delete']
 
     def get_serializer_class(self):
         if self.request.method == 'GET' or self.request.method == 'POST':
